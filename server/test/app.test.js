@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { before, test } from "node:test";
 import bcrypt from "bcrypt";
 import request from "supertest";
-import { createApp } from "../src/app.js";
+import vercelHandler, { createApp } from "../src/app.js";
 
 const jwtSecret = randomBytes(32).toString("hex");
 let passwordHash;
@@ -61,6 +61,29 @@ const pool = {
 before(async () => {
   passwordHash = await bcrypt.hash("correct-horse-battery-55", 4);
   app = createApp({ pool, env: { JWT_SECRET: jwtSecret, FRONTEND_ORIGIN: "http://localhost:5173", NODE_ENV: "test" } });
+});
+
+test("Vercel entry point dispatches /api requests through the Express app", async () => {
+  assert.equal(typeof vercelHandler, "function");
+  const originalEnv = {
+    DATABASE_URL: process.env.DATABASE_URL,
+    FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN,
+    JWT_SECRET: process.env.JWT_SECRET,
+    NODE_ENV: process.env.NODE_ENV,
+  };
+  process.env.DATABASE_URL = "postgres://test:test@127.0.0.1:5432/test";
+  process.env.FRONTEND_ORIGIN = "http://localhost:5173";
+  process.env.JWT_SECRET = jwtSecret;
+  process.env.NODE_ENV = "test";
+
+  try {
+    await request(vercelHandler).get("/api/auth/csrf").expect(200);
+  } finally {
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 });
 
 async function authenticatedAgent() {

@@ -6,6 +6,8 @@ import { createAuthRouter } from "./routes/auth.js";
 import { createInquiryRouter } from "./routes/inquiries.js";
 import { AppError, errorHandler, notFoundHandler } from "./middleware/errors.js";
 
+let serverlessAppPromise;
+
 export function createApp({ pool, env = process.env }) {
   if (!env.JWT_SECRET || Buffer.byteLength(env.JWT_SECRET) < 32) {
     throw new Error("JWT_SECRET must contain at least 32 bytes");
@@ -44,4 +46,13 @@ export function createApp({ pool, env = process.env }) {
   app.use(notFoundHandler);
   app.use(errorHandler);
   return app;
+}
+
+export default async function handler(req, res) {
+  if (!serverlessAppPromise) {
+    serverlessAppPromise = import("./db/pool.js")
+      .then(({ pool }) => createApp({ pool }));
+  }
+  const app = await serverlessAppPromise;
+  return app(req, res);
 }

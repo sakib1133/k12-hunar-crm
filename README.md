@@ -25,7 +25,8 @@ A full-stack inquiry workflow for K12 Hunar. The React/Vite client submits inqui
 │   │   ├── middleware/             # JWT authorization, CSRF, safe errors
 │   │   ├── routes/
 │   │   └── validation/
-│   │   ├── index.js                # Express entry point (local listener / Vercel function)
+│   │   ├── app.js                  # Express app factory and Vercel function handler
+│   │   ├── index.js                # Local development HTTP listener
 │   ├── test/app.test.js
 │   └── package.json
 ├── schema.sql
@@ -98,6 +99,8 @@ All responses are JSON except `POST /api/auth/logout` (`204`). Inquiry status va
 
 The frontend uses `HttpOnly` JWT cookies and includes credentials on API requests. CSRF tokens are required for login, logout, and status changes. Set `FRONTEND_ORIGIN` to the exact browser origin; wildcard CORS is not used. Public inquiry submission is limited to 20 requests per IP per 15 minutes.
 
+Admin self-registration is not exposed as an API route; provision admin accounts with the documented `npm run admin:create` command.
+
 ## Tests and production build
 
 ```powershell
@@ -109,7 +112,7 @@ The API tests cover bcrypt/JWT login, inquiry validation and insertion, protecte
 
 ## Deploy frontend and API to Vercel
 
-Deploy this repository as **two Vercel projects**. The client and Express API remain separate deployments, while the existing Supabase PostgreSQL database and all its data remain in place. The Express entry point is `server/src/index.js`; Vercel's Express runtime serves it as one function. The API routes retain their `/api` prefix.
+Deploy this repository as **two Vercel projects**. The client and Express API remain separate deployments, while the existing Supabase PostgreSQL database and all its data remain in place. For the API project, Vercel uses the default request-handler export from `server/src/app.js`; `server/src/index.js` remains the local development listener. The API routes retain their `/api` prefix.
 
 Use custom HTTPS domains on the **same registrable domain**, such as `app.example.com` and `api.example.com`. Production JWT and CSRF cookies are `Secure; SameSite=None` because the browser calls a different origin. Separate default `*.vercel.app` project domains may be treated as third-party cookies and can prevent admin authentication from working reliably.
 
@@ -123,7 +126,7 @@ Use custom HTTPS domains on the **same registrable domain**, such as `app.exampl
 
 ### Express API Vercel project
 
-1. Create a second Vercel project from the same repository. Set **Root Directory** to `server` and select the **Express** framework preset. Leave the detected build command and output directory unset; Vercel runs the Express app as a function. The package requires Node.js 20 or newer.
+1. Create a second Vercel project from the same repository. Set **Root Directory** to `server` and select the **Express** framework preset. Leave the detected build command and output directory unset; Vercel invokes the default handler in `src/app.js` as the Express function. The package requires Node.js 20 or newer.
 2. Add these **Production** environment variables:
 
    | Variable | Value |
