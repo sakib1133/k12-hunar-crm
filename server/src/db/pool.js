@@ -11,7 +11,7 @@ export function createPool(connectionString = process.env.DATABASE_URL) {
   return new Pool({
     connectionString,
     ssl: isProduction ? { rejectUnauthorized: true } : undefined,
-    max: 10,
+    max: process.env.VERCEL ? 1 : 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
   });

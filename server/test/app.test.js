@@ -85,6 +85,34 @@ test("admin login checks bcrypt credentials and issues an HttpOnly JWT cookie", 
   assert.match(response.headers["set-cookie"].join(";"), /admin_token=.*HttpOnly/);
 });
 
+test("production auth cookies are secure and CORS permits only the configured frontend", async () => {
+  const productionApp = createApp({
+    pool,
+    env: {
+      JWT_SECRET: randomBytes(32).toString("hex"),
+      FRONTEND_ORIGIN: "https://app.example.com",
+      NODE_ENV: "production",
+    },
+  });
+  const agent = request.agent(productionApp);
+  const csrf = await agent.get("/api/auth/csrf")
+    .set("Origin", "https://app.example.com")
+    .expect(200);
+
+  assert.equal(csrf.headers["access-control-allow-origin"], "https://app.example.com");
+  assert.equal(csrf.headers["access-control-allow-credentials"], "true");
+  assert.match(csrf.headers["set-cookie"].join(";"), /csrf_token=.*Secure; SameSite=None/);
+
+  const response = await agent.post("/api/auth/login")
+    .set("Origin", "https://app.example.com")
+    .set("Cookie", `csrf_token=${csrf.body.csrfToken}`)
+    .set("X-CSRF-Token", csrf.body.csrfToken)
+    .send({ email: "admin@example.com", password: "correct-horse-battery-55" })
+    .expect(200);
+
+  assert.match(response.headers["set-cookie"].join(";"), /admin_token=.*HttpOnly; Secure; SameSite=None/);
+});
+
 test("inquiry submission validates and inserts the provided fields with parameters", async () => {
   const response = await request(app).post("/api/inquiries").send({
     name: "  Riya Sharma ",

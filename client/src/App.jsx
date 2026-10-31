@@ -26,9 +26,16 @@ const userTypes = ["Parent", "Student", "School"];
 const categories = ["Scholarship", "Concert", "Admission", "General Query"];
 const statuses = ["New", "In Progress", "Resolved", "Rejected"];
 
+function viewForPath(pathname) {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  if (path === "/admin/login") return "login";
+  if (path === "/admin") return "dashboard";
+  return "home";
+}
+
 function Brand({ compact = false }) {
   return (
-    <a href="#home" className="flex items-center gap-3" aria-label="K12 Hunar home">
+    <a href="/" className="flex items-center gap-3" aria-label="K12 Hunar home">
       <span className="brand-mark"><GraduationCap size={22} strokeWidth={2.2} /></span>
       <span className="leading-tight">
         <span className="block text-[17px] font-extrabold tracking-tight text-navy">k12<span className="text-teal">hunar</span></span>
@@ -385,10 +392,19 @@ function formatDate(value) {
 }
 
 export default function App() {
-  const [view, setView] = useState("home");
+  const [view, setView] = useState(() => viewForPath(window.location.pathname));
   const [admin, setAdmin] = useState(null);
+  const [authChecking, setAuthChecking] = useState(() => viewForPath(window.location.pathname) === "dashboard");
   const [menuOpen, setMenuOpen] = useState(false);
   const [authError, setAuthError] = useState("");
+
+  const navigate = useCallback((path) => {
+    if (window.location.pathname !== path) {
+      window.history.pushState({}, "", path);
+    }
+    setView(viewForPath(path));
+    setMenuOpen(false);
+  }, []);
 
   const signOut = useCallback(async (makeRequest = true) => {
     if (makeRequest) {
@@ -401,24 +417,36 @@ export default function App() {
     }
     setAuthError("");
     setAdmin(null);
-    setView("home");
-  }, []);
+    navigate("/");
+  }, [navigate]);
 
   const showDashboard = useCallback(async () => {
+    setAuthChecking(true);
     try {
       const result = await api.currentAdmin();
       setAdmin(result.admin);
-      setView("dashboard");
+      navigate("/admin");
     } catch {
       setAdmin(null);
-      setView("login");
+      navigate("/admin/login");
+    } finally {
+      setAuthChecking(false);
     }
-  }, []);
+  }, [navigate]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const nextView = viewForPath(window.location.pathname);
+      setView(nextView);
+      if (nextView === "dashboard") void showDashboard();
+    };
+    window.addEventListener("popstate", handlePopState);
+    if (viewForPath(window.location.pathname) === "dashboard") void showDashboard();
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [showDashboard]);
 
   const goToAdmin = () => {
-    setMenuOpen(false);
-    if (admin) setView("dashboard");
-    else void showDashboard();
+    navigate(admin ? "/admin" : "/admin/login");
   };
 
   return (
@@ -427,16 +455,18 @@ export default function App() {
         <div className="mx-auto flex h-[76px] max-w-6xl items-center justify-between px-5">
           <Brand />
           <nav className="hidden items-center gap-8 md:flex" aria-label="Main navigation">
-            {view === "home" && <><a className="nav-link" href="#home">Home</a><a className="nav-link" href="#inquiry">Contact</a></>}
+            {view === "home" && <><a className="nav-link" href="/#home">Home</a><a className="nav-link" href="/#inquiry">Contact</a></>}
             <button className="nav-admin" onClick={goToAdmin} type="button">{admin ? <><Users size={15} /> Admin dashboard</> : <><LockKeyhole size={14} /> Team login</>}</button>
           </nav>
           <button className="grid h-10 w-10 place-items-center rounded-lg text-navy md:hidden" onClick={() => setMenuOpen((open) => !open)} type="button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen}>{menuOpen ? <X size={21} /> : <Menu size={21} />}</button>
         </div>
-        {menuOpen && <div className="mobile-nav md:hidden"><button onClick={() => { setMenuOpen(false); setView("home"); }} type="button">Home</button><a onClick={() => setMenuOpen(false)} href="#inquiry">Contact</a><button onClick={goToAdmin} type="button">{admin ? "Admin dashboard" : "Team login"}</button></div>}
+        {menuOpen && <div className="mobile-nav md:hidden"><a href="/">Home</a><a href="/#inquiry">Contact</a><button onClick={goToAdmin} type="button">{admin ? "Admin dashboard" : "Team login"}</button></div>}
       </header>
       {view === "home" && <HomePage />}
-      {view === "login" && <AdminLogin onSuccess={showDashboard} onCancel={() => setView("home")} />}
-      {view === "dashboard" && <Dashboard admin={admin} onLogout={signOut} authError={authError} clearAuthError={() => setAuthError("")} />}
+      {view === "login" && <AdminLogin onSuccess={showDashboard} onCancel={() => navigate("/")} />}
+      {view === "dashboard" && (authChecking
+        ? <main className="login-shell" role="status"><LoaderCircle className="animate-spin text-teal" size={26} /><span className="sr-only">Verifying admin session...</span></main>
+        : <Dashboard admin={admin} onLogout={signOut} authError={authError} clearAuthError={() => setAuthError("")} />)}
     </div>
   );
 }

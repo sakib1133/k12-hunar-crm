@@ -25,6 +25,7 @@ A full-stack inquiry workflow for K12 Hunar. The React/Vite client submits inqui
 │   │   ├── middleware/             # JWT authorization, CSRF, safe errors
 │   │   ├── routes/
 │   │   └── validation/
+│   │   ├── index.js                # Express entry point (local listener / Vercel function)
 │   ├── test/app.test.js
 │   └── package.json
 ├── schema.sql
@@ -50,8 +51,7 @@ In PowerShell, from the project root:
 ```powershell
 npm install
 npm run install:all
-Copy-Item server\.env.example server\.env
-Copy-Item client\.env.example client\.env
+if (-not (Test-Path server\.env)) { Copy-Item .env.example server\.env }
 ```
 
 Edit `server/.env` and set:
@@ -67,7 +67,7 @@ Edit `server/.env` and set:
 | `ADMIN_EMAIL` | For admin setup | Initial admin email address. |
 | `ADMIN_PASSWORD` | For admin setup | Unique password, at least 12 characters and no more than 72 UTF-8 bytes. Set it only for the one-time setup command and remove it afterward. |
 
-`client/.env` can stay empty in local development. Vite proxies `/api` to `http://localhost:4000`. `VITE_API_BASE_URL` is optional and is only needed when the frontend directly calls a separately hosted API.
+Vite proxies `/api` to `http://localhost:4000` in local development. `VITE_API_BASE_URL` is optional locally and is only needed when the frontend directly calls a separately hosted API.
 
 Initialize the database and create an initial admin, then start both applications:
 
@@ -77,7 +77,7 @@ npm run admin:create
 npm run dev
 ```
 
-Open `http://localhost:5173`. The server runs on port 4000. To run either process by itself, use `npm run dev:server` or `npm run dev:client`.
+Open `http://localhost:5173` for the public inquiry page or `http://localhost:5173/admin/login` for the admin login. The protected dashboard is at `http://localhost:5173/admin`. The server runs on port 4000. To run either process by itself, use `npm run dev:server` or `npm run dev:client`.
 
 The admin setup command reads `ADMIN_NAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` from `server/.env`, hashes the password with bcrypt cost 12, and does not change an account if that email already exists. Do not commit the local env file. Remove the `ADMIN_PASSWORD` value after setup; do not add a public admin-registration route.
 
@@ -107,38 +107,46 @@ npm run build
 
 The API tests cover bcrypt/JWT login, inquiry validation and insertion, protected routes, status authorization, parameterized filters/search/pagination, and CSRF rejection. They use a test-only in-memory query stub and do not require a live Supabase project. For a live readiness check, use `GET /api/health` after configuring the database.
 
-## Deploy: Render API + Vercel client
+## Deploy frontend and API to Vercel
 
-For cookie-based admin auth in production, use a custom domain with the frontend and API on the same registrable domain (for example `app.example.com` and `api.example.com`). Browsers increasingly restrict third-party cookies between the default `*.vercel.app` and `*.onrender.com` domains. The cookies are `Secure` and `SameSite=None` in production; same-site custom subdomains avoid third-party cookie blocking while retaining separate hosting.
+Deploy this repository as **two Vercel projects**. The client and Express API remain separate deployments, while the existing Supabase PostgreSQL database and all its data remain in place. The Express entry point is `server/src/index.js`; Vercel's Express runtime serves it as one function. The API routes retain their `/api` prefix.
 
-### Render
+Use custom HTTPS domains on the **same registrable domain**, such as `app.example.com` and `api.example.com`. Production JWT and CSRF cookies are `Secure; SameSite=None` because the browser calls a different origin. Separate default `*.vercel.app` project domains may be treated as third-party cookies and can prevent admin authentication from working reliably.
 
-1. Create a **Web Service** from this repository and keep its root directory at the repository root. This keeps the root `schema.sql` available to the setup script.
-2. Set build command to `npm install --prefix server` and start command to `npm start --prefix server`; select Node 20 or newer.
-3. Add runtime environment variables:
-   - `NODE_ENV=production`
-   - `DATABASE_URL` = Supabase connection URI
-   - `JWT_SECRET` = a new, random secret (do not reuse a local/dev secret)
-   - `FRONTEND_ORIGIN=https://app.example.com` (exact Vercel custom-domain origin; comma-separated if additional trusted origins are required)
-   - `PORT` is supplied by Render.
-4. Assign `api.example.com` to the Render service and confirm `https://api.example.com/api/health` returns `{"status":"ok"}`.
-5. Apply the schema and create the initial admin using a trusted one-time environment. Either run the setup scripts from a controlled machine with the production `DATABASE_URL`, or temporarily set the three `ADMIN_*` values in Render, run `npm run admin:create` from its Shell, then remove `ADMIN_PASSWORD` and the other setup-only values. Never expose the password in a committed file or build-time variable.
+### Frontend Vercel project
 
-### Vercel
+1. Import the repository as a Vercel project and set **Root Directory** to `client`.
+2. Select the **Vite** framework preset. Set **Build Command** to `npm run build` and **Output Directory** to `dist`; leave the install command at its detected default (`npm install`).
+3. Add `VITE_API_BASE_URL=https://api.example.com` to the frontend project's **Production** environment. This is a public API origin, not a secret; do not put database credentials or `JWT_SECRET` in any `VITE_*` variable. Redeploy after changing it.
+4. Assign `app.example.com` to this project.
+5. The existing `client/vercel.json` rewrites `/admin` and `/admin/login` to the SPA entry point, so opening or refreshing either direct URL loads the React app.
 
-1. Import the repository as a Vercel project and set the project root directory to `client`.
-2. Use `npm run build` as the build command and `dist` as the output directory.
-3. Set `VITE_API_BASE_URL=https://api.example.com` as a Vercel environment variable, then redeploy. This value is a public API origin, not a secret.
-4. Assign `app.example.com` to the Vercel project. Set Render's `FRONTEND_ORIGIN` to this exact origin and redeploy the API if necessary.
-5. Verify the browser can load the public page, submit an inquiry, sign in, load the protected dashboard, update status, and sign out. Verify the API CORS response allows only the configured frontend origin.
+### Express API Vercel project
 
-### Deployment checklist
+1. Create a second Vercel project from the same repository. Set **Root Directory** to `server` and select the **Express** framework preset. Leave the detected build command and output directory unset; Vercel runs the Express app as a function. The package requires Node.js 20 or newer.
+2. Add these **Production** environment variables:
 
-- [ ] Supabase schema applied and database SSL connection verified.
-- [ ] Render secrets configured; no database URL or JWT secret in Vercel.
-- [ ] Strong, unique JWT secret generated; admin password removed after account creation.
-- [ ] Custom frontend/API subdomains use HTTPS and share the same registrable domain.
-- [ ] Exact production frontend origin configured in Render CORS.
-- [ ] Production build and API health check pass.
-- [ ] Inquiry submit, admin login, filters, status update, and logout verified against the deployed services.
-- [ ] `.env` files and credentials excluded from the GitHub repository.
+   | Variable | Value |
+   |---|---|
+   | `DATABASE_URL` | Supabase PostgreSQL URI. Prefer Supabase's transaction pooler for serverless connections and include `sslmode=require`. |
+   | `JWT_SECRET` | New random value of at least 32 bytes. Keep it private and do not reuse a development secret. |
+   | `FRONTEND_ORIGIN` | Exact browser origin, `https://app.example.com` (scheme included, no trailing slash). Additional trusted origins may be comma-separated, but only add origins you control. |
+
+   Vercel supplies `NODE_ENV=production` for production deployments. Do not set `PORT`; Vercel manages it.
+3. Assign `api.example.com` to the API project. The frontend's API base URL must match this origin exactly.
+4. If using Vercel Preview deployments, configure their exact frontend origins in the API's `FRONTEND_ORIGIN` and provide an appropriate `VITE_API_BASE_URL` for the preview. CORS intentionally does not allow wildcard origins.
+
+### Existing Supabase data and initial admin
+
+Do not reset or replace the Supabase database. If the schema is already present, leave it in place. If setup is still required, inspect the current database first and apply `schema.sql` without dropping or recreating data. Run `npm run admin:create --prefix server` once from a trusted machine with the production database URL and one-time `ADMIN_NAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` values. The script hashes the password and does not change an existing account with that email. Do not put admin setup values in Vercel build variables; remove them from the local environment after setup.
+
+Keep local secrets in the ignored `server/.env`. `.gitignore` excludes `.env` files at every directory level while allowing the checked-in `.env.example` templates. Before pushing, verify that no real `.env` file is tracked.
+
+### Verify after setup
+
+1. Open `https://api.example.com/api/health`; a healthy database connection returns `{"status":"ok"}`.
+2. Open `https://app.example.com/` and `https://app.example.com/admin/login` directly, then refresh both `/admin/login` and `/admin`.
+3. Submit an inquiry; sign in; verify the protected dashboard, search, filters, status update, and sign out.
+4. In browser developer tools, confirm API requests include credentials and that login sets a `Secure`, `HttpOnly` `admin_token` cookie. Check that the API only allows the configured `FRONTEND_ORIGIN`.
+
+Vercel Functions are stateless and can scale to multiple instances. The PostgreSQL pool is limited to one connection per Vercel instance to avoid multiplying a large pool across instances. The existing rate limits use per-process memory and therefore are not a global rate limit across all Vercel instances; use a shared rate-limit store if globally coordinated limits become a requirement. Deployment, custom-domain setup, Supabase environment configuration, and live end-to-end verification must still be completed in your Vercel/Supabase accounts.
