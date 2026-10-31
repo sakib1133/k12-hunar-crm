@@ -1,4 +1,6 @@
-const apiBase = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+const apiBase = (import.meta.env.VITE_API_BASE_URL ?? "")
+  .replace(/\/+$/, "")
+  .replace(/\/api$/i, "");
 let csrfToken;
 
 async function request(path, options = {}) {

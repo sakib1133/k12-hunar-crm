@@ -120,7 +120,7 @@ Use custom HTTPS domains on the **same registrable domain**, such as `app.exampl
 
 1. Import the repository as a Vercel project and set **Root Directory** to `client`.
 2. Select the **Vite** framework preset. Set **Build Command** to `npm run build` and **Output Directory** to `dist`; leave the install command at its detected default (`npm install`).
-3. Add `VITE_API_BASE_URL=https://api.example.com` to the frontend project's **Production** environment. This is a public API origin, not a secret; do not put database credentials or `JWT_SECRET` in any `VITE_*` variable. Redeploy after changing it.
+3. Add `VITE_API_BASE_URL=https://k12-hunar-crm-8s3a.vercel.app` to the frontend project's **Production** environment. Set the backend origin only; do not append `/api` because every API request already includes that prefix. This is a public API origin, not a secret; do not put database credentials or `JWT_SECRET` in any `VITE_*` variable. Redeploy after changing it.
 4. Assign `app.example.com` to this project.
 5. The existing `client/vercel.json` rewrites `/admin` and `/admin/login` to the SPA entry point, so opening or refreshing either direct URL loads the React app.
 
@@ -133,7 +133,7 @@ Use custom HTTPS domains on the **same registrable domain**, such as `app.exampl
    |---|---|
    | `DATABASE_URL` | Supabase PostgreSQL URI. Prefer Supabase's transaction pooler for serverless connections and include `sslmode=require`. |
    | `JWT_SECRET` | New random value of at least 32 bytes. Keep it private and do not reuse a development secret. |
-   | `FRONTEND_ORIGIN` | Exact browser origin, `https://app.example.com` (scheme included, no trailing slash). Additional trusted origins may be comma-separated, but only add origins you control. |
+   | `FRONTEND_ORIGIN` | Exact browser origin, `https://k12-hunar-crm-ten.vercel.app` (scheme included, no trailing slash). Additional trusted origins may be comma-separated, but only add origins you control. |
 
    Vercel supplies `NODE_ENV=production` for production deployments. Do not set `PORT`; Vercel manages it.
 3. Assign `api.example.com` to the API project. The frontend's API base URL must match this origin exactly.
