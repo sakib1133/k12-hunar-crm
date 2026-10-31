@@ -1,77 +1,112 @@
 # K12 Hunar EdTech CRM & Inquiry System
 
-A full-stack inquiry workflow for K12 Hunar. The React/Vite client submits inquiries to an Express API; the API stores records in Supabase PostgreSQL through `pg`. Admin accounts use bcrypt password hashes and short-lived, signed JWTs in secure HTTP-only cookies. Supabase Auth is not used.
+## 1. Project Overview
 
-## Project structure
+K12 Hunar is a full-stack inquiry management application. Visitors can submit inquiries, and administrators can sign in to review and manage them.
+
+The React frontend communicates with an Express API. Inquiry and admin data is stored in Supabase PostgreSQL.
+
+## 2. Features
+
+- Public inquiry submission with input validation.
+- Admin login using bcrypt password hashes.
+- Signed JWT authentication in secure, HTTP-only cookies.
+- CSRF protection for login, logout, and inquiry status changes.
+- Admin inquiry search, filters, pagination, summary statistics, and status updates.
+- CORS restricted to configured frontend origins.
+- PostgreSQL connections use SSL. Production verifies the Supabase CA certificate.
+- Admin accounts are created with a setup command; there is no public registration endpoint.
+
+## 3. Technology Stack
+
+- **Frontend:** React, Vite, Tailwind CSS
+- **Backend:** Node.js, Express
+- **Database:** Supabase PostgreSQL, accessed with `pg`
+- **Authentication and security:** bcrypt, JSON Web Tokens, CSRF tokens, Helmet, CORS
+- **Testing:** Node.js test runner and Supertest
+- **Deployment:** Vercel for the frontend and backend; Supabase for PostgreSQL
+
+## 4. Project Structure
 
 ```text
-.
-├── client/
-│   ├── src/
-│   │   ├── App.jsx                 # Public inquiry page, login, and admin dashboard
-│   │   ├── api.js                  # Same-origin/dev-proxy API client and CSRF header
-│   │   └── styles.css              # Tailwind layers and responsive UI
-│   ├── .env.example
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.js
-├── server/
-│   ├── scripts/
-│   │   ├── create-admin.js         # One-time bcrypt-backed admin setup
-│   │   └── init-db.js              # Applies the root schema.sql
-│   ├── src/
-│   │   ├── controllers/            # Authentication and inquiry operations
-│   │   ├── db/                     # PostgreSQL pool
-│   │   ├── middleware/             # JWT authorization, CSRF, safe errors
-│   │   ├── routes/
-│   │   └── validation/
-│   │   ├── app.js                  # Express app factory and Vercel function handler
-│   │   ├── index.js                # Local development HTTP listener
-│   ├── test/app.test.js
-│   └── package.json
-├── schema.sql
-├── .env.example
-└── package.json
+client/
+  src/                 React application and API client
+  package.json         Frontend scripts and dependencies
+  vite.config.js       Vite development server and /api proxy
+  vercel.json          Frontend routes
+server/
+  src/
+    app.js             Express app and Vercel handler
+    index.js           Local HTTP server
+    controllers/       Authentication and inquiry operations
+    db/                PostgreSQL pool
+    middleware/        Authentication, CSRF, and error handling
+    routes/            API routes
+    validation/        Request validation
+  scripts/             Database and admin setup commands
+  test/                Backend tests
+  package.json         Backend scripts and dependencies
+schema.sql              PostgreSQL tables, constraints, triggers, and indexes
+.env.example            Example environment variables with placeholders
+package.json            Root development, test, and build scripts
 ```
 
-## Requirements
+## 5. Requirements
 
 - Node.js 20 or newer and npm
-- A Supabase project with its PostgreSQL database available
+- A Supabase project with PostgreSQL enabled
+- Git
 
-## Supabase setup
+## 6. Supabase Database Setup
 
-1. Create a Supabase project and copy its PostgreSQL connection URI from **Project Settings → Database → Connection string**. Use the session pooler connection if your hosting provider requires IPv4. Include `sslmode=require`, URL-encode special characters in the database password, and keep the URI private. For production, also download the project's CA certificate from **Database Settings → SSL Configuration**.
-2. Apply [`schema.sql`](./schema.sql) using the Supabase SQL Editor, or configure `server/.env` and run `npm run db:init`. The schema creates the `admins` and `inquiries` tables, constraints, timestamp triggers, and indexes.
-3. Use the database password/URI only on the backend. It must never be set as a `VITE_*` variable.
+1. In Supabase, open **Project Settings → Database → Connection string** and select the **Session Pooler** connection.
+2. Keep the connection URI private. URL-encode special characters in its username or password.
+3. Apply [`schema.sql`](./schema.sql) using the Supabase SQL Editor, or configure the local environment and run `npm run db:init` as described below.
+4. For production, download the project's CA certificate from **Database Settings → SSL Configuration**. Add its full PEM text to the backend's `DATABASE_SSL_CA` environment variable. The production backend requires this certificate and verifies it; do not disable certificate verification.
 
-## Local development
+## 7. Local Installation and Setup
 
-In PowerShell, from the project root:
+From the project root, install the root, server, and client dependencies:
 
 ```powershell
 npm install
 npm run install:all
+```
+
+Create the backend environment file if it does not exist:
+
+```powershell
 if (-not (Test-Path server\.env)) { Copy-Item .env.example server\.env }
 ```
 
-Edit `server/.env` and set:
+Edit `server/.env` and set the required database, JWT, and frontend origin values. Keep this file private and out of Git.
+
+## 8. Environment Variables
+
+`.env.example` contains placeholders only. Replace them in your private `server/.env` or the appropriate Vercel project settings. Never commit actual secrets, database URIs, passwords, JWT secrets, or private certificate contents. Do not put backend secrets in frontend `VITE_*` variables.
 
 | Variable | Required | Purpose |
-|---|---:|---|
-| `NODE_ENV` | No | Use `development` locally; set `production` when deployed. |
-| `PORT` | No | API port; defaults to `4000`. |
-| `DATABASE_URL` | Yes | Supabase PostgreSQL connection URI. |
-| `DATABASE_SSL_CA` | Production only | Supabase project's PEM-encoded database CA certificate. Leave blank for local development. |
-| `JWT_SECRET` | Yes | At least 32 bytes of unpredictable secret data. Generate locally with `node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"`. |
-| `FRONTEND_ORIGIN` | Yes | Exact frontend origin, such as `http://localhost:5173`; multiple exact origins may be comma-separated. |
-| `ADMIN_NAME` | For admin setup | Initial admin display name, up to 100 characters. |
-| `ADMIN_EMAIL` | For admin setup | Initial admin email address. |
-| `ADMIN_PASSWORD` | For admin setup | Unique password, at least 12 characters and no more than 72 UTF-8 bytes. Set it only for the one-time setup command and remove it afterward. |
+|---|---|---|
+| `DATABASE_URL` | Yes | Supabase Session Pooler PostgreSQL URI. |
+| `DATABASE_SSL_CA` | Production | Full PEM contents of the Supabase database CA certificate. Leave blank for local development. |
+| `JWT_SECRET` | Yes | Random secret of at least 32 bytes. Keep private. |
+| `FRONTEND_ORIGIN` | Yes | Exact frontend origin. Multiple trusted origins can be comma-separated. |
+| `NODE_ENV` | No | Use `development` locally. Vercel sets `production` for production deployments. |
+| `PORT` | No | Local API port; defaults to `4000`. Vercel manages its own port. |
+| `ADMIN_NAME` | Admin setup | Initial administrator's display name. |
+| `ADMIN_EMAIL` | Admin setup | Initial administrator's email. |
+| `ADMIN_PASSWORD` | Admin setup | Initial password; 12–72 UTF-8 bytes. Remove it after setup. |
+| `VITE_API_BASE_URL` | Frontend production | Backend origin only; do not append `/api`. Leave blank locally to use Vite's proxy. |
 
-Vite proxies `/api` to `http://localhost:4000` in local development. `VITE_API_BASE_URL` is optional locally and is only needed when the frontend directly calls a separately hosted API.
+Generate a JWT secret locally with:
 
-Initialize the database and create an initial admin, then start both applications:
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"
+```
+
+## 9. Running the Application
+
+Initialize the database if needed, create the initial admin account, and start both applications:
 
 ```powershell
 npm run db:init
@@ -79,79 +114,87 @@ npm run admin:create
 npm run dev
 ```
 
-Open `http://localhost:5173` for the public inquiry page or `http://localhost:5173/admin/login` for the admin login. The protected dashboard is at `http://localhost:5173/admin`. The server runs on port 4000. To run either process by itself, use `npm run dev:server` or `npm run dev:client`.
+The frontend is at `http://localhost:5173`; the API listens on `http://localhost:4000`. Vite forwards `/api` requests to the local API.
 
-The admin setup command reads `ADMIN_NAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` from `server/.env`, hashes the password with bcrypt cost 12, and does not change an account if that email already exists. Do not commit the local env file. Remove the `ADMIN_PASSWORD` value after setup; do not add a public admin-registration route.
+To run one application by itself:
 
-## API
+```powershell
+npm run dev:client
+npm run dev:server
+```
 
-All responses are JSON except `POST /api/auth/logout` (`204`). Inquiry status values are `New`, `In Progress`, `Resolved`, and `Rejected`.
+The public inquiry page is at `/`. Admin sign-in is at `/admin/login`, and the dashboard is at `/admin`.
 
-| Method | Path | Access | Description |
+## 10. Admin Account Setup
+
+Set `ADMIN_NAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` in `server/.env`, then run:
+
+```powershell
+npm run admin:create
+```
+
+The command hashes the password with bcrypt. If the email already exists, it does not change that account. Remove `ADMIN_PASSWORD` from the environment after setup. Do not add a public admin-registration endpoint.
+
+## 11. API Endpoints
+
+All responses are JSON except logout, which returns `204 No Content`. Inquiry statuses are `New`, `In Progress`, `Resolved`, and `Rejected`.
+
+| Method | Endpoint | Access | Description |
 |---|---|---|---|
 | `GET` | `/api/health` | Public | Checks API and database connectivity. |
-| `POST` | `/api/inquiries` | Public | Validates and stores a new inquiry. |
-| `GET` | `/api/auth/csrf` | Public | Issues a CSRF cookie/token pair. |
-| `POST` | `/api/auth/login` | Public + CSRF | Verifies bcrypt credentials; sets an 8-hour JWT cookie. Limited to 10 attempts per IP per 15 minutes. |
+| `POST` | `/api/inquiries` | Public | Validates and submits an inquiry. |
+| `GET` | `/api/auth/csrf` | Public | Issues a CSRF token and cookie. |
+| `POST` | `/api/auth/login` | Public + CSRF | Checks admin credentials and sets an 8-hour JWT cookie. |
 | `POST` | `/api/auth/logout` | Admin + CSRF | Clears the admin and CSRF cookies. |
-| `GET` | `/api/auth/me` | Admin | Returns the current active admin profile. |
-| `GET` | `/api/inquiries` | Admin | Lists inquiries and summary stats. Supports `category`, `userType`, `status`, `search`, `page`, and `limit` query parameters. Search covers name and phone; limit is 1–100 (default 25). |
-| `PATCH` | `/api/inquiries/:id/status` | Admin + CSRF | Updates an inquiry status. JSON body: `{"status":"Resolved"}`. |
+| `GET` | `/api/auth/me` | Admin | Returns the signed-in admin profile. |
+| `GET` | `/api/inquiries` | Admin | Lists inquiries and summary statistics. Supports `category`, `userType`, `status`, `search`, `page`, and `limit`; search covers name and phone, and limit is 1–100 (default 25). |
+| `PATCH` | `/api/inquiries/:id/status` | Admin + CSRF | Updates an inquiry status. |
 
-The frontend uses `HttpOnly` JWT cookies and includes credentials on API requests. CSRF tokens are required for login, logout, and status changes. Set `FRONTEND_ORIGIN` to the exact browser origin; wildcard CORS is not used. Public inquiry submission is limited to 20 requests per IP per 15 minutes.
+The frontend sends cookies with API requests. CORS allows only the configured `FRONTEND_ORIGIN`; wildcard origins are not used. Login is limited to 10 attempts per IP per 15 minutes, and public inquiry submission is limited to 20 per IP per 15 minutes.
 
-Admin self-registration is not exposed as an API route; provision admin accounts with the documented `npm run admin:create` command.
+## 12. Testing and Build
 
-## Tests and production build
+Run the backend tests and build the frontend from the project root:
 
 ```powershell
 npm test
 npm run build
 ```
 
-The API tests cover bcrypt/JWT login, inquiry validation and insertion, protected routes, status authorization, parameterized filters/search/pagination, and CSRF rejection. They use a test-only in-memory query stub and do not require a live Supabase project. For a live readiness check, use `GET /api/health` after configuring the database.
+The backend tests use a test database stub and do not require a live Supabase connection.
 
-## Deploy frontend and API to Vercel
+## 13. Deployment on Vercel
 
-Deploy this repository as **two Vercel projects**. The client and Express API remain separate deployments, while the existing Supabase PostgreSQL database and all its data remain in place. For the API project, Vercel uses the default request-handler export from `server/src/app.js`; `server/src/index.js` remains the local development listener. The API routes retain their `/api` prefix.
+The frontend and backend are deployed as **two separate Vercel projects** from this repository. Supabase PostgreSQL remains the database.
 
-Use custom HTTPS domains on the **same registrable domain**, such as `app.example.com` and `api.example.com`. Production JWT and CSRF cookies are `Secure; SameSite=None` because the browser calls a different origin. Separate default `*.vercel.app` project domains may be treated as third-party cookies and can prevent admin authentication from working reliably.
+### Frontend project
 
-### Frontend Vercel project
+1. Set the Vercel **Root Directory** to `client`, with the Vite framework preset.
+2. Use `npm run build` as the build command and `dist` as the output directory.
+3. Set this Production environment variable:
 
-1. Import the repository as a Vercel project and set **Root Directory** to `client`.
-2. Select the **Vite** framework preset. Set **Build Command** to `npm run build` and **Output Directory** to `dist`; leave the install command at its detected default (`npm install`).
-3. Add `VITE_API_BASE_URL=https://k12-hunar-crm-8s3a.vercel.app` to the frontend project's **Production** environment. Set the backend origin only; do not append `/api` because every API request already includes that prefix. This is a public API origin, not a secret; do not put database credentials or `JWT_SECRET` in any `VITE_*` variable. Redeploy after changing it.
-4. Assign `app.example.com` to this project.
-5. The existing `client/vercel.json` rewrites `/admin` and `/admin/login` to the SPA entry point, so opening or refreshing either direct URL loads the React app.
+   ```text
+   VITE_API_BASE_URL=https://k12-hunar-crm-8s3a.vercel.app
+   ```
 
-### Express API Vercel project
+   Use only the backend origin. The frontend already adds the `/api` route prefix. Redeploy the frontend after changing this variable.
 
-1. Create a second Vercel project from the same repository. Set **Root Directory** to `server` and select the **Express** framework preset. Leave the detected build command and output directory unset; Vercel invokes the default handler in `src/app.js` as the Express function. The package requires Node.js 20 or newer.
-2. Add these **Production** environment variables:
+### Backend project
 
-   | Variable | Value |
-   |---|---|
-   | `DATABASE_URL` | Supabase PostgreSQL URI. Prefer Supabase's transaction pooler for serverless connections and include `sslmode=require`. |
-   | `DATABASE_SSL_CA` | Full PEM contents of the Supabase project's CA certificate, downloaded from **Database Settings → SSL Configuration**. The production pool requires it and enables CA and hostname verification. |
-   | `JWT_SECRET` | New random value of at least 32 bytes. Keep it private and do not reuse a development secret. |
-   | `FRONTEND_ORIGIN` | Exact browser origin, `https://k12-hunar-crm-ten.vercel.app` (scheme included, no trailing slash). Additional trusted origins may be comma-separated, but only add origins you control. |
+1. Set the Vercel **Root Directory** to `server` and use the Express framework preset. Vercel serves the Express handler in `src/app.js`; `src/index.js` is for local development.
+2. Set these Production environment variables:
+   - `DATABASE_URL`: Supabase Session Pooler connection URI.
+   - `DATABASE_SSL_CA`: Full PEM text of the CA certificate downloaded from this Supabase project's Database Settings. Keep certificate verification enabled.
+   - `JWT_SECRET`: A private random secret of at least 32 bytes.
+   - `FRONTEND_ORIGIN=https://k12-hunar-crm-ten.vercel.app`
+3. Do not set `PORT` in Vercel. Do not put database credentials or `JWT_SECRET` in frontend variables.
 
-   Vercel supplies `NODE_ENV=production` for production deployments. Do not set `PORT`; Vercel manages it.
-3. Assign `api.example.com` to the API project. The frontend's API base URL must match this origin exactly.
-4. If using Vercel Preview deployments, configure their exact frontend origins in the API's `FRONTEND_ORIGIN` and provide an appropriate `VITE_API_BASE_URL` for the preview. CORS intentionally does not allow wildcard origins.
+The backend allows credentialed requests only from the exact `FRONTEND_ORIGIN`. Production JWT cookies are `Secure`, `HttpOnly`, and use `SameSite=None` for cross-origin frontend requests. No custom domains are required for these Vercel project URLs.
 
-### Existing Supabase data and initial admin
+## 14. Live Application Links
 
-Do not reset or replace the Supabase database. If the schema is already present, leave it in place. If setup is still required, inspect the current database first and apply `schema.sql` without dropping or recreating data. Run `npm run admin:create --prefix server` once from a trusted machine with the production database URL and one-time `ADMIN_NAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` values. The script hashes the password and does not change an existing account with that email. Do not put admin setup values in Vercel build variables; remove them from the local environment after setup.
+- **Frontend:** [https://k12-hunar-crm-ten.vercel.app](https://k12-hunar-crm-ten.vercel.app/)
+- **Admin sign-in:** [https://k12-hunar-crm-ten.vercel.app/admin/login](https://k12-hunar-crm-ten.vercel.app/admin/login)
+- **Backend API health check:** [https://k12-hunar-crm-8s3a.vercel.app/api/health](https://k12-hunar-crm-8s3a.vercel.app/api/health)
 
-Keep local secrets in the ignored `server/.env`. `.gitignore` excludes `.env` files at every directory level while allowing the checked-in `.env.example` templates. Before pushing, verify that no real `.env` file is tracked.
-
-### Verify after setup
-
-1. Open `https://api.example.com/api/health`; a healthy database connection returns `{"status":"ok"}`.
-2. Open `https://app.example.com/` and `https://app.example.com/admin/login` directly, then refresh both `/admin/login` and `/admin`.
-3. Submit an inquiry; sign in; verify the protected dashboard, search, filters, status update, and sign out.
-4. In browser developer tools, confirm API requests include credentials and that login sets a `Secure`, `HttpOnly` `admin_token` cookie. Check that the API only allows the configured `FRONTEND_ORIGIN`.
-
-Vercel Functions are stateless and can scale to multiple instances. The PostgreSQL pool is limited to one connection per Vercel instance to avoid multiplying a large pool across instances. The existing rate limits use per-process memory and therefore are not a global rate limit across all Vercel instances; use a shared rate-limit store if globally coordinated limits become a requirement. Deployment, custom-domain setup, Supabase environment configuration, and live end-to-end verification must still be completed in your Vercel/Supabase accounts.
+The health endpoint returns `{"status":"ok"}` when the API can connect to PostgreSQL. To verify the application, submit an inquiry, sign in, review the inquiry list, and test search, filters, status updates, and sign-out.
