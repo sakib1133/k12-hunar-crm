@@ -41,7 +41,7 @@ A full-stack inquiry workflow for K12 Hunar. The React/Vite client submits inqui
 
 ## Supabase setup
 
-1. Create a Supabase project and copy its PostgreSQL connection URI from **Project Settings → Database → Connection string**. Use the session pooler connection if your hosting provider requires IPv4. Include `sslmode=require`, URL-encode special characters in the database password, and keep the URI private.
+1. Create a Supabase project and copy its PostgreSQL connection URI from **Project Settings → Database → Connection string**. Use the session pooler connection if your hosting provider requires IPv4. Include `sslmode=require`, URL-encode special characters in the database password, and keep the URI private. For production, also download the project's CA certificate from **Database Settings → SSL Configuration**.
 2. Apply [`schema.sql`](./schema.sql) using the Supabase SQL Editor, or configure `server/.env` and run `npm run db:init`. The schema creates the `admins` and `inquiries` tables, constraints, timestamp triggers, and indexes.
 3. Use the database password/URI only on the backend. It must never be set as a `VITE_*` variable.
 
@@ -62,6 +62,7 @@ Edit `server/.env` and set:
 | `NODE_ENV` | No | Use `development` locally; set `production` when deployed. |
 | `PORT` | No | API port; defaults to `4000`. |
 | `DATABASE_URL` | Yes | Supabase PostgreSQL connection URI. |
+| `DATABASE_SSL_CA` | Production only | Supabase project's PEM-encoded database CA certificate. Leave blank for local development. |
 | `JWT_SECRET` | Yes | At least 32 bytes of unpredictable secret data. Generate locally with `node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"`. |
 | `FRONTEND_ORIGIN` | Yes | Exact frontend origin, such as `http://localhost:5173`; multiple exact origins may be comma-separated. |
 | `ADMIN_NAME` | For admin setup | Initial admin display name, up to 100 characters. |
@@ -132,6 +133,7 @@ Use custom HTTPS domains on the **same registrable domain**, such as `app.exampl
    | Variable | Value |
    |---|---|
    | `DATABASE_URL` | Supabase PostgreSQL URI. Prefer Supabase's transaction pooler for serverless connections and include `sslmode=require`. |
+   | `DATABASE_SSL_CA` | Full PEM contents of the Supabase project's CA certificate, downloaded from **Database Settings → SSL Configuration**. The production pool requires it and enables CA and hostname verification. |
    | `JWT_SECRET` | New random value of at least 32 bytes. Keep it private and do not reuse a development secret. |
    | `FRONTEND_ORIGIN` | Exact browser origin, `https://k12-hunar-crm-ten.vercel.app` (scheme included, no trailing slash). Additional trusted origins may be comma-separated, but only add origins you control. |
 
